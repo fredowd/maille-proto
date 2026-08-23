@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MAILLE — Suivi de production</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="wrap">
+
+  <header>
+    <div class="brand">
+      <div class="mark">MAI<span>LLE</span></div>
+      <div class="tag">SUIVI TNA / WIP — PROTOTYPE</div>
+    </div>
+    <div class="whoami hidden" id="whoami">
+      <span>Connecté en tant que <b id="whoamiName"></b></span>
+      <button class="btn secondary small" onclick="logout()">Se déconnecter</button>
+    </div>
+  </header>
+
+  <!-- ============ AUTH SCREEN ============ -->
+  <div id="authScreen">
+    <div class="auth-box">
+      <h1 id="authTitle">Créer un compte</h1>
+      <p class="sub">Compte usine / retailer — tes données sont isolées des autres comptes.</p>
+
+      <div id="signupFields">
+        <div class="field">
+          <label>Nom de l'usine / entreprise</label>
+          <input type="text" id="factoryName" placeholder="Ex: Atelier Tex Sud">
+        </div>
+      </div>
+
+      <div class="field">
+        <label>E-mail</label>
+        <input type="email" id="email" placeholder="toi@exemple.com">
+      </div>
+      <div class="field">
+        <label>Mot de passe</label>
+        <input type="password" id="password" placeholder="8 caractères minimum">
+      </div>
+
+      <button class="btn" id="authSubmit" style="width:100%" onclick="handleAuthSubmit()">Créer mon compte</button>
+      <div class="error-msg hidden" id="authError"></div>
+      <div class="info-msg hidden" id="authInfo"></div>
+
+      <div class="auth-switch">
+        <span id="authSwitchText">Déjà un compte ?</span>
+        <a onclick="toggleAuthMode()" id="authSwitchLink">Se connecter</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ DASHBOARD ============ -->
+  <div id="dashboard" class="hidden">
+
+    <div class="panel">
+      <h2>Ajouter un style / une commande</h2>
+      <div class="new-style-form">
+        <div class="field">
+          <label>Référence</label>
+          <input type="text" id="newRef" placeholder="PL-108">
+        </div>
+        <div class="field">
+          <label>Nom du style</label>
+          <input type="text" id="newName" placeholder="Chemise Oxford">
+        </div>
+        <div class="field">
+          <label>Client</label>
+          <input type="text" id="newClient" placeholder="Nom du client">
+        </div>
+        <div class="field">
+          <label>Date cible</label>
+          <input type="date" id="newDate">
+        </div>
+        <button class="btn" onclick="createStyle()">Ajouter</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Tableau WIP</h2>
+      <div class="board" id="board"></div>
+    </div>
+
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
