@@ -142,11 +142,6 @@ async function updateStage(id, newStage) {
   await loadStyles();
 }
 
-async function updateStatus(id, newStatus) {
-  await sb.from('styles').update({ status: newStatus, updated_at: new Date().toISOString() }).eq('id', id);
-  await loadStyles();
-}
-
 async function closeStyle(id) {
   await sb.from('styles').update({ stage: 'Cloture', updated_at: new Date().toISOString() }).eq('id', id);
   await loadStyles();
@@ -169,6 +164,7 @@ async function loadStyles() {
     return;
   }
   renderBoard(styles || []);
+  await refreshOverview();
 }
 
 function renderBoard(styles) {
@@ -196,15 +192,11 @@ function renderBoard(styles) {
         <select onchange="updateStage('${s.id}', this.value)">
           ${STAGES.map(st => `<option value="${st}" ${st === s.stage ? 'selected' : ''}>${STAGE_LABELS[st]}</option>`).join('')}
         </select>
-        <select onchange="updateStatus('${s.id}', this.value)">
-          <option value="ontime" ${s.status === 'ontime' ? 'selected' : ''}>Dans les temps</option>
-          <option value="risk" ${s.status === 'risk' ? 'selected' : ''}>À risque</option>
-          <option value="late" ${s.status === 'late' ? 'selected' : ''}>En retard</option>
-        </select>
         <div class="card-actions">
           <button class="btn secondary small" onclick="closeStyle('${s.id}')">Fermer</button>
           <button class="btn secondary small" onclick="deleteStyle('${s.id}')">Suppr.</button>
         </div>
+        <button class="btn tna-open" onclick="openTna('${s.id}', '${escapeHtml(s.style_ref)}', '${escapeHtml(s.style_name)}')">Calendrier TNA</button>
       `;
       col.appendChild(card);
     });
@@ -223,6 +215,167 @@ function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = str;
   return div.innerHTML;
+}
+
+let currentTnaStyleId = null;
+
+async function openTna(styleId, ref, name) {
+  currentTnaStyleId = styleId;
+  document.getElementById('tnaModalSub').textContent = `${ref} — ${name}`;
+  document.getElementById('tnaModal').classList.remove('hidden');
+  await loadTnaSteps(styleId);
+}
+
+function closeTna() {
+  document.getElementById('tnaModal').classList.add('hidden');
+  currentTnaStyleId = null;
+}
+
+async function loadTnaSteps(styleId) {
+  const { data: steps, error } = await sb
+    .from('tna_steps')
+    .select('*')
+    .eq('style_id', styleId)
+    .order('step_order', { ascending: true });
+
+  if (error) {
+    document.getElementById('tnaModalBody').innerHTML =
+      `<div class="error-msg">Erreur de chargement : ${escapeHtml(error.message)}</div>`;
+    return;
+  }
+  renderTnaSteps(steps || []);
+}
+
+function renderTnaSteps(steps) {
+  const body = document.getElementById('tnaModalBody');
+  if (steps.length === 0) {
+    body.innerHTML = `<div class="empty">Aucune étape trouvée pour cette commande.</div>`;
+    return;
+  }
+  body.innerHTML = steps.map(step => `
+    <div class="tna-row">
+      <div class="step-label">${escapeHtml(step.step_name)}</div>
+      <div>
+        <label>Date prévue</label>
+        <input type="date" value="${step.planned_date || ''}"
+          onchange="updateTnaStep('${step.id}', 'planned_date', this.value)">
+      </div>
+      <div>
+        <label>Date réelle</label>
+        <input type="date" value="${step.actual_date || ''}"
+          onchange="updateTnaStep('${step.id}', 'actual_date', this.value)">
+      </div>
+      <div>
+        <label>Statut</label>
+        <span class="badge ${step.status}" style="display:inline-block;">${tnaStatusLabel(step.status)}</span>
+      </div>
+    </div>
+  `).join('');
+  const note = document.createElement('div');
+  note.className = 'auto-note';
+  note.textContent = 'Statut calculé automatiquement à partir des dates.';
+  body.appendChild(note);
+}
+
+function tnaStatusLabel(status) {
+  if (status === 'late') return 'EN RETARD';
+  if (status === 'done') return 'FAIT';
+  return 'EN ATTENTE';
+}
+
+async function updateTnaStep(id, field, value) {
+  const payload = { [field]: value || null, updated_at: new Date().toISOString() };
+  const { error } = await sb.from('tna_steps').update(payload).eq('id', id);
+  if (error) {
+    alert("Erreur lors de la mise à jour : " + error.message);
+    return;
+  }
+  if (currentTnaStyleId) await loadTnaSteps(currentTnaStyleId);
+  await refreshOverview();
+}
+
+async function refreshOverview() {
+  const { data: rows, error } = await sb
+    .from('tna_steps')
+    .select('id, step_name, planned_date, actual_date, status, style_id, styles(style_ref, style_name, client, stage)')
+    .order('planned_date', { ascending: true });
+
+  if (error) { console.error(error); return; }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const activeRows = (rows || []).filter(r => r.styles && r.styles.stage !== 'Cloture');
+  const activeStyleIds = new Set(activeRows.map(r => r.style_id));
+  const lateStyleIds = new Set();
+  const actionItems = [];
+
+  activeRows.forEach(r => {
+    if (r.status === 'late') {
+      lateStyleIds.add(r.style_id);
+      const planned = new Date(r.planned_date);
+      planned.setHours(0, 0, 0, 0);
+      const daysLate = Math.round((today - planned) / (1000 * 60 * 60 * 24));
+      actionItems.push({ ...r, urgency: 'late', days: daysLate });
+    } else if (r.status === 'pending' && r.planned_date) {
+      const planned = new Date(r.planned_date);
+      planned.setHours(0, 0, 0, 0);
+      const daysUntil = Math.round((planned - today) / (1000 * 60 * 60 * 24));
+      if (daysUntil >= 0 && daysUntil <= 3) {
+        actionItems.push({ ...r, urgency: 'soon', days: daysUntil });
+      }
+    }
+  });
+
+  actionItems.sort((a, b) => {
+    if (a.urgency !== b.urgency) return a.urgency === 'late' ? -1 : 1;
+    return a.urgency === 'late' ? (b.days - a.days) : (a.days - b.days);
+  });
+
+  const activeCount = activeStyleIds.size;
+  const lateCount = lateStyleIds.size;
+  const onTimeRate = activeCount > 0 ? Math.round(((activeCount - lateCount) / activeCount) * 100) : 100;
+
+  renderOverview({
+    activeCount,
+    lateCount,
+    onTimeRate,
+    actionItems: actionItems.slice(0, 8)
+  });
+}
+
+function renderOverview({ activeCount, lateCount, onTimeRate, actionItems }) {
+  const kpis = document.getElementById('kpis');
+  kpis.innerHTML = `
+    <div class="kpi"><div class="num amber">${activeCount}</div><div class="lbl">Commandes actives</div></div>
+    <div class="kpi"><div class="num red">${lateCount}</div><div class="lbl">En retard</div></div>
+    <div class="kpi"><div class="num green">${onTimeRate}%</div><div class="lbl">Taux on-time</div></div>
+    <div class="kpi"><div class="num">${actionItems.length}</div><div class="lbl">Actions à traiter</div></div>
+  `;
+
+  const list = document.getElementById('priorityList');
+  if (actionItems.length === 0) {
+    list.innerHTML = `<div class="empty">Rien d'urgent — toutes les étapes sont à jour.</div>`;
+    return;
+  }
+  list.innerHTML = actionItems.map(item => {
+    const st = item.styles;
+    const badge = item.urgency === 'late'
+      ? `<span class="priority-badge late">RETARD ${item.days}J</span>`
+      : `<span class="priority-badge soon">DANS ${item.days}J</span>`;
+    return `
+      <div class="priority-item">
+        <div class="priority-left">
+          <div class="priority-order">${escapeHtml(st.style_ref)} — ${escapeHtml(st.style_name)}</div>
+          <div class="priority-step">${escapeHtml(item.step_name)}${st.client ? ' · ' + escapeHtml(st.client) : ''}</div>
+        </div>
+        <div class="priority-right">
+          ${badge}
+          <button class="btn secondary small" onclick="openTna('${item.style_id}', '${escapeHtml(st.style_ref)}', '${escapeHtml(st.style_name)}')">Voir</button>
+        </div>
+      </div>
+    `;
+  }).join('');
 }
 
 // Au chargement : vérifie si une session existe déjà

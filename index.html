@@ -60,6 +60,16 @@
   <div id="dashboard" class="hidden">
 
     <div class="panel">
+      <h2>Aperçu</h2>
+      <div class="kpis" id="kpis"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Actions prioritaires</h2>
+      <div id="priorityList"></div>
+    </div>
+
+    <div class="panel">
       <h2>Ajouter un style / une commande</h2>
       <div class="new-style-form">
         <div class="field">
@@ -87,6 +97,20 @@
       <div class="board" id="board"></div>
     </div>
 
+  </div>
+
+  <!-- ============ MODALE TNA ============ -->
+  <div id="tnaModal" class="modal-overlay hidden">
+    <div class="modal-box">
+      <div class="modal-head">
+        <div>
+          <h2 id="tnaModalTitle" style="margin:0;">Calendrier TNA</h2>
+          <div class="modal-sub" id="tnaModalSub"></div>
+        </div>
+        <button class="btn secondary small" onclick="closeTna()">Fermer</button>
+      </div>
+      <div id="tnaModalBody"></div>
+    </div>
   </div>
 
 </div>
