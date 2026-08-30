@@ -6,6 +6,6 @@
 // quitter un serveur.
 
 window.MAILLE_CONFIG = {
-  SUPABASE_URL: "https://fquanqdylhgxwtpyxmik.supabase.co/rest/v1/",
+  SUPABASE_URL: "https://fquanqdylhgxwtpyxmik.supabase.co",
   SUPABASE_ANON_KEY: "sb_publishable_zBO56hw3I3TP0Ye_FtPUKA_Irexssgn"
 };
