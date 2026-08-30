@@ -70,6 +70,26 @@
     </div>
 
     <div class="panel">
+      <h2>Portefeuille clients</h2>
+      <div class="new-client-form">
+        <div class="field">
+          <label>Nom du client</label>
+          <input type="text" id="newClientName" placeholder="Ex: Meridian Apparel">
+        </div>
+        <div class="field">
+          <label>Contact (optionnel)</label>
+          <input type="text" id="newClientContact" placeholder="Nom du contact">
+        </div>
+        <div class="field">
+          <label>E-mail (optionnel)</label>
+          <input type="email" id="newClientEmail" placeholder="contact@client.com">
+        </div>
+        <button class="btn" onclick="createClient()">Ajouter à mon portefeuille</button>
+      </div>
+      <div id="clientList" class="client-list"></div>
+    </div>
+
+    <div class="panel">
       <h2>Ajouter un style / une commande</h2>
       <div class="new-style-form">
         <div class="field">
@@ -82,7 +102,9 @@
         </div>
         <div class="field">
           <label>Client</label>
-          <input type="text" id="newClient" placeholder="Nom du client">
+          <select id="newClientSelect">
+            <option value="">— Sélectionner un client —</option>
+          </select>
         </div>
         <div class="field">
           <label>Date cible</label>
@@ -90,6 +112,7 @@
         </div>
         <button class="btn" onclick="createStyle()">Ajouter</button>
       </div>
+      <div class="error-msg hidden" id="styleFormError"></div>
     </div>
 
     <div class="panel">

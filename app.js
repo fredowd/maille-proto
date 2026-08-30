@@ -102,17 +102,25 @@ async function onLoggedIn() {
   document.getElementById('whoamiName').textContent =
     (profile.organizations && profile.organizations.name) || user.email;
 
+  await loadClients();
   await loadStyles();
 }
 
 async function createStyle() {
   const ref = document.getElementById('newRef').value.trim();
   const name = document.getElementById('newName').value.trim();
-  const client = document.getElementById('newClient').value.trim();
+  const clientId = document.getElementById('newClientSelect').value;
   const date = document.getElementById('newDate').value;
+  const errorEl = document.getElementById('styleFormError');
+  errorEl.classList.add('hidden');
 
   if (!ref || !name) {
     alert('Référence et nom du style sont requis.');
+    return;
+  }
+  if (!clientId) {
+    errorEl.textContent = "Sélectionne un client existant, ou ajoute-le d'abord dans ton portefeuille clients ci-dessus.";
+    errorEl.classList.remove('hidden');
     return;
   }
 
@@ -120,7 +128,7 @@ async function createStyle() {
     org_id: currentProfile.org_id,
     style_ref: ref,
     style_name: name,
-    client: client || null,
+    client_id: clientId,
     target_date: date || null,
     created_by: currentProfile.id
   });
@@ -132,7 +140,7 @@ async function createStyle() {
 
   document.getElementById('newRef').value = '';
   document.getElementById('newName').value = '';
-  document.getElementById('newClient').value = '';
+  document.getElementById('newClientSelect').value = '';
   document.getElementById('newDate').value = '';
   await loadStyles();
 }
@@ -156,7 +164,7 @@ async function deleteStyle(id) {
 async function loadStyles() {
   const { data: styles, error } = await sb
     .from('styles')
-    .select('*')
+    .select('*, clients(name)')
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -182,13 +190,14 @@ function renderBoard(styles) {
     }
 
     items.forEach(s => {
+      const clientName = s.clients ? s.clients.name : (s.client || null);
       const card = document.createElement('div');
       card.className = 'card';
       card.innerHTML = `
         <div class="badge ${s.status}">${badgeLabel(s.status)}</div>
         <div class="style-ref">${escapeHtml(s.style_ref)}</div>
         <div class="style-name">${escapeHtml(s.style_name)}</div>
-        <div class="client">${s.client ? escapeHtml(s.client) : '—'}${s.target_date ? ' · ' + s.target_date : ''}</div>
+        <div class="client">${clientName ? escapeHtml(clientName) : '—'}${s.target_date ? ' · ' + s.target_date : ''}</div>
         <select onchange="updateStage('${s.id}', this.value)">
           ${STAGES.map(st => `<option value="${st}" ${st === s.stage ? 'selected' : ''}>${STAGE_LABELS[st]}</option>`).join('')}
         </select>
@@ -229,6 +238,92 @@ async function openTna(styleId, ref, name) {
 function closeTna() {
   document.getElementById('tnaModal').classList.add('hidden');
   currentTnaStyleId = null;
+}
+
+async function loadClients() {
+  const { data: clients, error } = await sb
+    .from('clients')
+    .select('*')
+    .order('name', { ascending: true });
+
+  if (error) { console.error(error); return; }
+  renderClientList(clients || []);
+  renderClientSelect(clients || []);
+}
+
+function renderClientList(clients) {
+  const list = document.getElementById('clientList');
+  if (clients.length === 0) {
+    list.innerHTML = `<div class="empty">Aucun client dans ton portefeuille pour l'instant.</div>`;
+    return;
+  }
+  list.innerHTML = clients.map(c => `
+    <div class="client-row">
+      <div>
+        <div class="name">${escapeHtml(c.name)}</div>
+        <div class="meta">${c.contact_name ? escapeHtml(c.contact_name) : ''}${c.contact_email ? ' · ' + escapeHtml(c.contact_email) : ''}</div>
+      </div>
+      <div class="actions">
+        <button class="btn secondary small" onclick="editClient('${c.id}', '${escapeHtml(c.name)}')">Renommer</button>
+        <button class="btn secondary small" onclick="deleteClient('${c.id}')">Suppr.</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderClientSelect(clients) {
+  const select = document.getElementById('newClientSelect');
+  const current = select.value;
+  select.innerHTML = `<option value="">— Sélectionner un client —</option>` +
+    clients.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+  if (clients.some(c => c.id === current)) select.value = current;
+}
+
+async function createClient() {
+  const name = document.getElementById('newClientName').value.trim();
+  const contact = document.getElementById('newClientContact').value.trim();
+  const email = document.getElementById('newClientEmail').value.trim();
+
+  if (!name) {
+    alert('Le nom du client est requis.');
+    return;
+  }
+
+  const { error } = await sb.from('clients').insert({
+    org_id: currentProfile.org_id,
+    name,
+    contact_name: contact || null,
+    contact_email: email || null
+  });
+
+  if (error) {
+    alert("Erreur lors de la création du client : " + error.message);
+    return;
+  }
+
+  document.getElementById('newClientName').value = '';
+  document.getElementById('newClientContact').value = '';
+  document.getElementById('newClientEmail').value = '';
+  await loadClients();
+}
+
+async function editClient(id, oldName) {
+  const newName = prompt('Nouveau nom du client :', oldName);
+  if (newName === null || newName.trim() === '' || newName === oldName) return;
+  const { error } = await sb.from('clients')
+    .update({ name: newName.trim(), updated_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) { alert("Erreur : " + error.message); return; }
+  await loadClients();
+  await loadStyles();
+}
+
+async function deleteClient(id) {
+  if (!confirm('Supprimer ce client ? Les commandes déjà liées resteront mais perdront ce lien.')) return;
+  const { error } = await sb.from('clients').delete().eq('id', id);
+  if (error) { alert("Erreur : " + error.message); return; }
+  await loadClients();
+  await loadStyles();
 }
 
 async function loadTnaSteps(styleId) {
@@ -297,7 +392,7 @@ async function updateTnaStep(id, field, value) {
 async function refreshOverview() {
   const { data: rows, error } = await sb
     .from('tna_steps')
-    .select('id, step_name, planned_date, actual_date, status, style_id, styles(style_ref, style_name, client, stage)')
+    .select('id, step_name, planned_date, actual_date, status, style_id, styles(style_ref, style_name, stage, clients(name))')
     .order('planned_date', { ascending: true });
 
   if (error) { console.error(error); return; }
@@ -360,6 +455,7 @@ function renderOverview({ activeCount, lateCount, onTimeRate, actionItems }) {
   }
   list.innerHTML = actionItems.map(item => {
     const st = item.styles;
+    const clientName = st.clients ? st.clients.name : null;
     const badge = item.urgency === 'late'
       ? `<span class="priority-badge late">RETARD ${item.days}J</span>`
       : `<span class="priority-badge soon">DANS ${item.days}J</span>`;
@@ -367,7 +463,7 @@ function renderOverview({ activeCount, lateCount, onTimeRate, actionItems }) {
       <div class="priority-item">
         <div class="priority-left">
           <div class="priority-order">${escapeHtml(st.style_ref)} — ${escapeHtml(st.style_name)}</div>
-          <div class="priority-step">${escapeHtml(item.step_name)}${st.client ? ' · ' + escapeHtml(st.client) : ''}</div>
+          <div class="priority-step">${escapeHtml(item.step_name)}${clientName ? ' · ' + escapeHtml(clientName) : ''}</div>
         </div>
         <div class="priority-right">
           ${badge}
