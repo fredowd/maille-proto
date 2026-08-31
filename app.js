@@ -279,7 +279,7 @@ function renderClientSelect(clients) {
   if (clients.some(c => c.id === current)) select.value = current;
 }
 
-async function createClient() {
+async function createClientFunc() {
   const name = document.getElementById('newClientName').value.trim();
   const contact = document.getElementById('newClientContact').value.trim();
   const email = document.getElementById('newClientEmail').value.trim();
